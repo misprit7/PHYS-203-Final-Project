@@ -11,6 +11,9 @@ public class Simulation {
     private static final double PLANCK_CONSTANT = 6.626e-34;
     private static final double LIGHT_SPEED = 3.0e8;
     private static final double BOLTZMANN_CONSTANT = 1.381e-23;
+    private static final double AVAGADRO_CONSTANT = 6.02e23;
+
+    private static final double YEARS_TO_SEC = 365 * 24 * 60 * 60;
 
 
     // In K
@@ -19,11 +22,12 @@ public class Simulation {
     private static final double EARTH_SUN_DIST = 152080000000.0;
     // In m
     private static final double EARTH_RAD = 6371000;
+    // In m
+    private static final double SUN_RAD = 696340000;
     //In m
     private static final double SCALE_HEIGHT = 7310;
 
     // In K
-    // Need an actual number for this
     private static final double ATM_TEMP_OFFSET = 66;
 
     // Effective global heat capacity, in J m^-2 K^-2
@@ -36,9 +40,9 @@ public class Simulation {
     private int endYear;
     private double timeStep;
 
-    private int initT;
-    private int initCO2;
-    private int slopeCO2;
+    private double initT;
+    private double initCO2;
+    private double slopeCO2;
 
     public double[] time;
     public double[] temperature;
@@ -52,7 +56,7 @@ public class Simulation {
      * @param initCO2 the inital CO2 density, in moles/m^3
      * @param slopeCO2 assuming linear gradient, how fast initCO2 is changing
      */
-    public Simulation(int endYear, double timeStep, int initT, int initCO2, int slopeCO2){
+    public Simulation(int endYear, double timeStep, double initT, double initCO2, double slopeCO2){
         this.endYear = endYear;
         this.timeStep = timeStep;
 
@@ -73,6 +77,7 @@ public class Simulation {
     public void run(){
 
         double Hin = GetHin();
+        double earthArea = 4 * Math.PI * Math.pow(EARTH_RAD, 2);
 
         // Here t is the length of time since beginning of simulation
         int i = 0;
@@ -85,11 +90,11 @@ public class Simulation {
 
             // Get H2O vapour pressure
             double pressureH2O = GetH2O(earthT);
-            double densityH2O = pressureH2O / GAS_CONSTANT / earthT;
+            double densityH2O = pressureH2O / GAS_CONSTANT / earthT / 1e6;
 
             // Wavelength calculations
             double Hout = 0;
-            for(double wavelength = 2; wavelength < 30; wavelength += WAVELENGTH_STEP){
+            for(double wavelength = 0.01; wavelength < 40; wavelength += WAVELENGTH_STEP){
                 double blackbodyIntensityEarth = GetBlackbody(earthT, wavelength/1e6);
                 double blackbodyIntensityAtm = GetBlackbody(atmT, wavelength/1e6);
                 double blackbodyIntensity = blackbodyIntensityAtm;
@@ -101,20 +106,21 @@ public class Simulation {
                 } else if (wavelength > 14 && wavelength < 19){
                     double sigmaH2O = 4.045e-21;
                     double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
-                    double transmitH2O = Math.exp(-densityH2O * sigmaH2O * SCALE_HEIGHT);
-                    double transmitCO2 = Math.exp(-densityCO2[i] * sigmaCO2 * SCALE_HEIGHT);
+
+                    double transmitH2O = Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
+                    double transmitCO2 = Math.exp(-densityCO2[i] * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
                     double transmitTotal = transmitCO2 * transmitH2O;
+
                     blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
                         blackbodyIntensityAtm * (1-transmitTotal);
                 }
-                Hout += blackbodyIntensity * WAVELENGTH_STEP;
+                Hout += blackbodyIntensity * earthArea * WAVELENGTH_STEP / 1e6;
             }
 
             // Heat calculations
             double Hnet = Hin-Hout;
-            double Enet = Hnet * timeStep;
+            double Enet = Hnet * timeStep * YEARS_TO_SEC;
 
-            double earthArea = 4 * Math.PI * Math.pow(EARTH_RAD, 2);
             this.temperature[i] = earthT + Enet / (EARTH_SPECIFIC_HEAT * earthArea);
 
         }
@@ -126,9 +132,10 @@ public class Simulation {
      * @return Hin in W/m^2
      */
     private static double GetHin(){
-        double earthArea = Math.PI * Math.pow(EARTH_RAD, 2);
+        double earthDiskArea = Math.PI * Math.pow(EARTH_RAD, 2);
+        double sunArea = 4 * Math.PI * Math.pow(SUN_RAD, 2);
         double SunSphereArea = 4*Math.PI*Math.pow(EARTH_SUN_DIST, 2);
-        return STEFAN_BOLTZMANN * Math.pow(SUN_TEMP, 4) * earthArea / SunSphereArea;
+        return STEFAN_BOLTZMANN * Math.pow(SUN_TEMP, 4) * earthDiskArea * sunArea / SunSphereArea;
     }
 
     /**
@@ -136,10 +143,10 @@ public class Simulation {
      * Third equation:
      * https://en.wikipedia.org/wiki/Vapour_pressure_of_water
      * @param T the temperature to look at
-     * @return The vapour pressure in kPa
+     * @return The vapour pressure in Pa
      */
     private static double GetH2O(double T){
-        return 0.61094 * Math.exp(17.625 * T / (T + 243.04));
+        return 1e3 * 0.61094 * Math.exp(17.625 * T / (T + 243.04));
     }
 
     /**

@@ -6,13 +6,9 @@ import org.knowm.xchart.XYChart;
 
 public class Main {
     public static void main(String[] args) {
-        double[] xData = new double[] { 0.0, 1.0, 2.0 };
-        double[] yData = new double[] { 2.0, 1.0, 0.0 };
-
-        // Create Chart
-        XYChart chart = QuickChart.getChart("Sample Chart", "X", "Y", "y(x)", xData, yData);
-
-        // Show it
-        new SwingWrapper(chart).displayChart();
+        Simulation testSim = new Simulation(30, 0.1, 300, 0, 0);
+        testSim.run();
+        testSim.graphTemp();
+//        System.out.println("Hello world");
     }
 }

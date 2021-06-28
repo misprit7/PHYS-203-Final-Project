@@ -1,12 +1,18 @@
 package ClimateSim;
+import org.knowm.xchart.BitmapEncoder;
 import org.knowm.xchart.PieChart;
 import org.knowm.xchart.QuickChart;
 import org.knowm.xchart.SwingWrapper;
 import org.knowm.xchart.XYChart;
+import org.knowm.xchart.XYChartBuilder;
+import org.knowm.xchart.style.Styler;
+
+import java.io.IOException;
+import java.util.List;
 
 public class Simulation {
 
-    private static final double  STEFAN_BOLTZMANN = 5.67e-8;
+    private static final double STEFAN_BOLTZMANN = 5.67e-8;
     private static final double GAS_CONSTANT = 8.3145;
     private static final double PLANCK_CONSTANT = 6.626e-34;
     private static final double LIGHT_SPEED = 3.0e8;
@@ -28,7 +34,7 @@ public class Simulation {
     private static final double SCALE_HEIGHT = 7310;
 
     // In K
-    private static final double ATM_TEMP_OFFSET = 66;
+    static final double ATM_TEMP_OFFSET = 66;
 
     // Effective global heat capacity, in J m^-2 K^-2
     // https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2007JD008746
@@ -84,7 +90,6 @@ public class Simulation {
         for(double t = 0; t < this.endYear; ++i, t += this.timeStep){
             // Set initial constants
             double earthT = i==0 ? this.initT : temperature[i - 1];
-            double atmT = earthT - ATM_TEMP_OFFSET;
             this.densityCO2[i] = this.initCO2+this.slopeCO2*t;
             this.time[i] = t;
 
@@ -93,32 +98,7 @@ public class Simulation {
             double densityH2O = pressureH2O / GAS_CONSTANT / earthT / 1e6;
 
             // Wavelength calculations
-            double Hout = 0;
-            for(double wavelength = 0.01; wavelength < 1000; wavelength += WAVELENGTH_STEP){
-                double blackbodyIntensityEarth = GetBlackbody(earthT, wavelength/1e6);
-                double blackbodyIntensityAtm = GetBlackbody(atmT, wavelength/1e6);
-                double blackbodyIntensity = blackbodyIntensityEarth;
-
-                if(wavelength < 8 || wavelength > 19){
-                    blackbodyIntensity = blackbodyIntensityAtm;
-                } else if (wavelength > 8 && wavelength < 14){
-                    blackbodyIntensity = blackbodyIntensityEarth;
-                } else if (wavelength > 14 && wavelength < 19){
-                    double sigmaH2O = 4.045e-22;
-                    double sigmaCO2 = wavelength > 14 && wavelength < 16 ? 0.613e-18 : 0;
-
-                    double transmitH2O = Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
-                    double transmitCO2 = Math.exp(-densityCO2[i] * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
-                    double transmitTotal = transmitCO2 * transmitH2O;
-
-                    blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
-                        blackbodyIntensityAtm * (1-transmitTotal);
-                    if(t>28 && wavelength>14.3){
-                        int x = 0;
-                    }
-                }
-                Hout += blackbodyIntensity * earthArea * WAVELENGTH_STEP / 1e6;
-            }
+            double Hout = GetHout(earthT, densityH2O, densityCO2[i], null, null);
 
             // Heat calculations
             double Hnet = Hin-Hout;
@@ -128,6 +108,51 @@ public class Simulation {
 
         }
 
+    }
+
+    /**
+     * Gets heat going out of earth
+     * @param earthT temperature of earth in K
+     * @param densityH2O molar density of water, in mol/cm^3
+     * @param densityCO2 molar density of CO2, in mol/cm^3
+     * @param wavelengths wavelengths for data plotting returned, if wanted must be of length 100000, can be null
+     * @param spectrum spectrum for data plotting returned, can be null
+     * @return total heat out
+     */
+    public static double GetHout(double earthT, double densityH2O, double densityCO2, double[] wavelengths, double[] spectrum){
+        double earthArea = 4 * Math.PI * Math.pow(EARTH_RAD, 2);
+        double atmT = earthT - ATM_TEMP_OFFSET;
+        double Hout = 0;
+        int i = 0;
+        for(double wavelength = 0.01; wavelength < 1000; ++i, wavelength += WAVELENGTH_STEP){
+            double blackbodyIntensityEarth = GetBlackbody(earthT, wavelength/1e6);
+            double blackbodyIntensityAtm = GetBlackbody(atmT, wavelength/1e6);
+            double blackbodyIntensity = blackbodyIntensityEarth;
+
+            if(wavelength < 8 || wavelength > 19){
+                blackbodyIntensity = blackbodyIntensityAtm;
+            } else if (wavelength > 8 && wavelength < 14){
+                blackbodyIntensity = blackbodyIntensityEarth;
+            } else if (wavelength > 14 && wavelength < 19){
+                double sigmaH2O = 4.045e-22;
+                double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
+
+                double transmitH2O = Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
+                double transmitCO2 = Math.exp(-densityCO2 * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
+                double transmitTotal = transmitCO2 * transmitH2O;
+
+                blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
+                    blackbodyIntensityAtm * (1-transmitTotal);
+            }
+
+            double dI = blackbodyIntensity;
+            if(wavelengths != null && spectrum != null) {
+                wavelengths[i] = wavelength;
+                spectrum[i] = dI;
+            }
+            Hout += dI * earthArea * WAVELENGTH_STEP / 1e6;
+        }
+        return Hout;
     }
 
     /**
@@ -164,15 +189,38 @@ public class Simulation {
             (wavelength * BOLTZMANN_CONSTANT * T)) - 1);
     }
 
-    public void graphTemp(){
-        XYChart chart = QuickChart
-            .getChart("Temperature of Earth vs. Time", "Time (years)", "Temperature", "Temperature", this.time, this.temperature);
+    /**
+     * Graphs data
+     * @param title title of graph
+     * @param xAxis x axis title
+     * @param yAxis y axis title
+     * @param dataNames names of data series
+     * @param xData x data of plots
+     * @param yData list of y data to plot
+     */
+    public static void graphData(String title, String xAxis, String yAxis, List<String> dataNames, double[] xData, List<double[]> yData, boolean save){
+        XYChart chart = new XYChartBuilder().width(800).height(600)
+            .title(title).xAxisTitle(xAxis)
+            .yAxisTitle(yAxis).theme(Styler.ChartTheme.GGPlot2).build();
+        chart.getStyler().setLegendPosition(Styler.LegendPosition.InsideSE);
+        for(int i = 0; i < dataNames.size(); ++i) {
+            chart.addSeries(dataNames.get(i), xData, yData.get(i));
+        }
+        if (save) {
+            try {
+                BitmapEncoder
+                    .saveBitmap(chart, "./charts/" + title, BitmapEncoder.BitmapFormat.PNG);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
         new SwingWrapper(chart).displayChart();
     }
 
     public static void blackBodyTest(double T, double[] inputArray){
-        for (int i=1;i<30;i++){
-            inputArray[i] = GetBlackbody(T,i);
+        int i = 0;
+        for (double wavelength=0.01; wavelength<1000; ++i, wavelength+=WAVELENGTH_STEP){
+            inputArray[i] = GetBlackbody(T,wavelength/1e6);
         }
     }
 

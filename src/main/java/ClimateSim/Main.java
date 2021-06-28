@@ -6,7 +6,7 @@ import org.knowm.xchart.XYChart;
 
 public class Main {
     public static void main(String[] args) {
-        Simulation testSim = new Simulation(30, 0.1, 255, 0*9.6e13 / 6.02e23, 0);
+        Simulation testSim = new Simulation(30, 0.1, 255, 9.6e15 / 6.02e23, 0);
         testSim.run();
         testSim.graphTemp();
 

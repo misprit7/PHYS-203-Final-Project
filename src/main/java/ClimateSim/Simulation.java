@@ -167,4 +167,10 @@ public class Simulation {
         new SwingWrapper(chart).displayChart();
     }
 
+    public static void blackBodyTest(double T, double[] inputArray){
+        for (int i=1;i<30;i++){
+            inputArray[i] = GetBlackbody(T,i);
+        }
+    }
+
 }

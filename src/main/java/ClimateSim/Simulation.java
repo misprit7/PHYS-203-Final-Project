@@ -4,22 +4,29 @@ public class Simulation {
 
     private static final double  STEFAN_BOLTZMANN = 5.67e-8;
     private static final double GAS_CONSTANT = 8.3145;
+    private static final double PLANCK_CONSTANT = 6.626e-34;
+    private static final double LIGHT_SPEED = 3.0e8;
+    private static final double BOLTZMANN_CONSTANT = 1.381e-23;
+
     // In K
     private static final double SUN_TEMP = 5778;
     // In m
     private static final double EARTH_SUN_DIST = 152080000000.0;
     // In m
     private static final double EARTH_RAD = 6371000;
-
+    //In m
+    private static final double SCALE_HEIGHT = 7310;
 
     // In K
     // Need an actual number for this
-    private static final double ATM_TEMP_OFFSET = 50;
+    private static final double ATM_TEMP_OFFSET = 66;
 
     // Effective global heat capacity, in GJ m^-2 K^-2
     // https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2007JD008746
     // In table 3, note the massive uncertainty
     private static final double EARTH_SPECIFIC_HEAT = 0.53;
+
+    private static final double WAVELENGTH_STEP = 0.01;
 
     private int endYear;
     private double timeStep;
@@ -68,6 +75,26 @@ public class Simulation {
 
             // Wavelength calculations
             double Hout = 0;
+            for(double wavelength = 2; wavelength < 30; wavelength += WAVELENGTH_STEP){
+                double blackbodyIntensityEarth = GetBlackbody(earthT, wavelength);
+                double blackbodyIntensityAtm = GetBlackbody(atmT, wavelength);
+                double blackbodyIntensity = blackbodyIntensityAtm;
+
+                if(wavelength < 8 || wavelength > 19){
+                    blackbodyIntensity = blackbodyIntensityAtm;
+                } else if (wavelength > 8 && wavelength < 14){
+                    blackbodyIntensity = blackbodyIntensityEarth;
+                } else if (wavelength > 14 && wavelength < 19){
+                    double sigmaH2O = 4.045e-21;
+                    double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
+                    double transmitH2O = Math.exp(-densityH2O * sigmaH2O * SCALE_HEIGHT);
+                    double transmitCO2 = Math.exp(-densityCO2[i] * sigmaCO2 * SCALE_HEIGHT);
+                    double transmitTotal = transmitCO2 * transmitH2O;
+                    blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
+                        blackbodyIntensityAtm * (1-transmitTotal);
+                }
+                Hout += blackbodyIntensity * WAVELENGTH_STEP;
+            }
 
             // Heat calculations
             double Hnet = Hin-Hout;
@@ -95,10 +122,22 @@ public class Simulation {
      * Third equation:
      * https://en.wikipedia.org/wiki/Vapour_pressure_of_water
      * @param T the temperature to look at
-     * @return The vapour pressure in Pa
+     * @return The vapour pressure in kPa
      */
     private static double GetH2O(double T){
         return 0.61094 * Math.exp(17.625 * T / (T + 243.04));
+    }
+
+    /**
+     * Gets blackbody intensity
+     * @param T temperature in K
+     * @param wavelength wavelength in m
+     * @return the blackbody intensity for this wavelength
+     */
+    private static double GetBlackbody(double T, double wavelength){
+        return 2 * Math.PI * PLANCK_CONSTANT * Math.pow(LIGHT_SPEED, 2) /
+            Math.pow(wavelength, 5) / (Math.exp(PLANCK_CONSTANT * LIGHT_SPEED /
+            (wavelength * BOLTZMANN_CONSTANT * T))-1);
     }
 
 }

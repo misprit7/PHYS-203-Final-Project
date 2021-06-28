@@ -104,8 +104,8 @@ public class Simulation {
                 } else if (wavelength > 8 && wavelength < 14){
                     blackbodyIntensity = blackbodyIntensityEarth;
                 } else if (wavelength > 14 && wavelength < 19){
-                    double sigmaH2O = 4.045e-21;
-                    double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
+                    double sigmaH2O = 4.045e-22;
+                    double sigmaCO2 = wavelength > 14 && wavelength < 16 ? 0.613e-18 : 0;
 
                     double transmitH2O = Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
                     double transmitCO2 = Math.exp(-densityCO2[i] * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
@@ -113,6 +113,9 @@ public class Simulation {
 
                     blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
                         blackbodyIntensityAtm * (1-transmitTotal);
+                    if(t>28 && wavelength>14.3){
+                        int x = 0;
+                    }
                 }
                 Hout += blackbodyIntensity * earthArea * WAVELENGTH_STEP / 1e6;
             }

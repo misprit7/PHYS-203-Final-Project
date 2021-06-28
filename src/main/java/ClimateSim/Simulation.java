@@ -53,7 +53,7 @@ public class Simulation {
      * @param endYear the end date of the simulation
      * @param timeStep the timestep for each tick, in years
      * @param initT the initial temperature, int K
-     * @param initCO2 the inital CO2 density, in moles/m^3
+     * @param initCO2 the inital CO2 density, in moles/cm^3
      * @param slopeCO2 assuming linear gradient, how fast initCO2 is changing
      */
     public Simulation(int endYear, double timeStep, double initT, double initCO2, double slopeCO2){
@@ -94,26 +94,29 @@ public class Simulation {
 
             // Wavelength calculations
             double Hout = 0;
-            for(double wavelength = 0.01; wavelength < 40; wavelength += WAVELENGTH_STEP){
+            for(double wavelength = 0.01; wavelength < 1000; wavelength += WAVELENGTH_STEP){
                 double blackbodyIntensityEarth = GetBlackbody(earthT, wavelength/1e6);
                 double blackbodyIntensityAtm = GetBlackbody(atmT, wavelength/1e6);
-                double blackbodyIntensity = blackbodyIntensityAtm;
+                double blackbodyIntensity = blackbodyIntensityEarth;
 
-                if(wavelength < 8 || wavelength > 19){
-                    blackbodyIntensity = blackbodyIntensityAtm;
-                } else if (wavelength > 8 && wavelength < 14){
-                    blackbodyIntensity = blackbodyIntensityEarth;
-                } else if (wavelength > 14 && wavelength < 19){
-                    double sigmaH2O = 4.045e-21;
-                    double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
-
-                    double transmitH2O = Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
-                    double transmitCO2 = Math.exp(-densityCO2[i] * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
-                    double transmitTotal = transmitCO2 * transmitH2O;
-
-                    blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
-                        blackbodyIntensityAtm * (1-transmitTotal);
-                }
+//                if(wavelength < 8 || wavelength > 19){
+////                    blackbodyIntensity = blackbodyIntensityAtm;
+//                    blackbodyIntensity = blackbodyIntensityEarth;
+//                } else if (wavelength > 8 && wavelength < 14){
+//                    blackbodyIntensity = blackbodyIntensityEarth;
+//                } else if (wavelength > 14 && wavelength < 19){
+//                    double sigmaH2O = 4.045e-21;
+//                    sigmaH2O = 0;
+//                    double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
+//                    sigmaCO2 = 0;
+//
+//                    double transmitH2O = Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
+//                    double transmitCO2 = Math.exp(-densityCO2[i] * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
+//                    double transmitTotal = transmitCO2 * transmitH2O;
+//
+//                    blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
+//                        blackbodyIntensityAtm * (1-transmitTotal);
+//                }
                 Hout += blackbodyIntensity * earthArea * WAVELENGTH_STEP / 1e6;
             }
 
@@ -146,7 +149,7 @@ public class Simulation {
      * @return The vapour pressure in Pa
      */
     private static double GetH2O(double T){
-        return 1e3 * 0.61094 * Math.exp(17.625 * T / (T + 243.04));
+        return 1e3 * 0.61094 * Math.exp(17.625 * (T-273) / ((T-273) + 243.04));
     }
 
     /**
@@ -156,7 +159,7 @@ public class Simulation {
      * @return the blackbody intensity for this wavelength in W/m^2
      */
     private static double GetBlackbody(double T, double wavelength) {
-        return 2 * Math.PI * PLANCK_CONSTANT * Math.pow(LIGHT_SPEED, 2) /
+        return 2.78 * Math.PI * PLANCK_CONSTANT * Math.pow(LIGHT_SPEED, 2) /
             Math.pow(wavelength, 5) / (Math.exp(PLANCK_CONSTANT * LIGHT_SPEED /
             (wavelength * BOLTZMANN_CONSTANT * T)) - 1);
     }

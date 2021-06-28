@@ -1,4 +1,5 @@
 package ClimateSim;
+import org.knowm.xchart.PieChart;
 
 public class Simulation {
 

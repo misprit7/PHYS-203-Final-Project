@@ -54,6 +54,7 @@ public class Simulation {
     public double[] temperature;
     public double[] densityCO2;
     public double[] heatOut;
+    boolean useGreenhouse;
 
     /**
      * @param endYear the end date of the simulation
@@ -62,13 +63,14 @@ public class Simulation {
      * @param initCO2 the inital CO2 density, in moles/cm^3
      * @param slopeCO2 assuming linear gradient, how fast initCO2 is changing
      */
-    public Simulation(int endYear, double timeStep, double initT, double initCO2, double slopeCO2){
+    public Simulation(int endYear, double timeStep, double initT, double initCO2, double slopeCO2, boolean useGreenhouse){
         this.endYear = endYear;
         this.timeStep = timeStep;
 
         this.initT= initT;
         this.initCO2 = initCO2;
         this.slopeCO2 = slopeCO2;
+        this.useGreenhouse = useGreenhouse;
 
         int arrLen = (int)(endYear/timeStep);
         this.temperature = new double[arrLen];
@@ -98,7 +100,7 @@ public class Simulation {
             double densityH2O = pressureH2O / GAS_CONSTANT / earthT / 1e6;
 
             // Wavelength calculations
-            double Hout = GetHout(earthT, densityH2O, densityCO2[i], null, null);
+            double Hout = GetHout(earthT, densityH2O, densityCO2[i], this.useGreenhouse, null, null);
 
             // Heat calculations
             double Hnet = Hin-Hout;
@@ -119,7 +121,7 @@ public class Simulation {
      * @param spectrum spectrum for data plotting returned, can be null
      * @return total heat out
      */
-    public static double GetHout(double earthT, double densityH2O, double densityCO2, double[] wavelengths, double[] spectrum){
+    public static double GetHout(double earthT, double densityH2O, double densityCO2, boolean useGreenhouse, double[] wavelengths, double[] spectrum){
         double earthArea = 4 * Math.PI * Math.pow(EARTH_RAD, 2);
         double atmT = earthT - ATM_TEMP_OFFSET;
         double Hout = 0;
@@ -129,20 +131,26 @@ public class Simulation {
             double blackbodyIntensityAtm = GetBlackbody(atmT, wavelength/1e6);
             double blackbodyIntensity = blackbodyIntensityEarth;
 
-            if(wavelength < 8 || wavelength > 19){
-                blackbodyIntensity = blackbodyIntensityAtm;
-            } else if (wavelength > 8 && wavelength < 14){
+            if(useGreenhouse) {
+                if (wavelength < 8 || wavelength > 19) {
+                    blackbodyIntensity = blackbodyIntensityAtm;
+                } else if (wavelength > 8 && wavelength < 14) {
+                    blackbodyIntensity = blackbodyIntensityEarth;
+                } else if (wavelength > 14 && wavelength < 19) {
+                    double sigmaH2O = 4.045e-22;
+                    double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
+
+                    double transmitH2O =
+                        Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
+                    double transmitCO2 =
+                        Math.exp(-densityCO2 * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
+                    double transmitTotal = transmitCO2 * transmitH2O;
+
+                    blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
+                        blackbodyIntensityAtm * (1 - transmitTotal);
+                }
+            } else {
                 blackbodyIntensity = blackbodyIntensityEarth;
-            } else if (wavelength > 14 && wavelength < 19){
-                double sigmaH2O = 4.045e-22;
-                double sigmaCO2 = wavelength > 14.3 && wavelength < 15.6 ? 0.613e-18 : 0;
-
-                double transmitH2O = Math.exp(-densityH2O * AVAGADRO_CONSTANT * sigmaH2O * SCALE_HEIGHT);
-                double transmitCO2 = Math.exp(-densityCO2 * AVAGADRO_CONSTANT * sigmaCO2 * SCALE_HEIGHT);
-                double transmitTotal = transmitCO2 * transmitH2O;
-
-                blackbodyIntensity = blackbodyIntensityEarth * transmitTotal +
-                    blackbodyIntensityAtm * (1-transmitTotal);
             }
 
             double dI = blackbodyIntensity;
